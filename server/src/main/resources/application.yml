@@ -1,0 +1,13 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: kepu-server
+
+logging:
+  level:
+    root: INFO
+    com.kepu.server: DEBUG
