@@ -75,16 +75,32 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
-  const isAdmin = localStorage.getItem('isAdmin') === 'true'
+  // 从localStorage获取用户信息
+  const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+  const isLoggedIn = !!userInfo.userId // 检查用户是否登录
+  const isAdmin = userInfo.role === 'ADMIN' // 检查用户是否是管理员
 
-  if (to.meta.requiresAuth && !token) {
-    // 如果需要认证但没有token，重定向到登录页
-    next('/login')
-  } else if (to.meta.requiresAdmin && !isAdmin) {
-    // 如果需要管理员权限但不是管理员，重定向到首页
-    next('/')
-  } else {
+  // 管理员页面需要管理员权限
+  if (to.path.startsWith('/admin') && !isAdmin) {
+    if (!isLoggedIn) {
+      // 未登录用户重定向到登录页
+      next('/login')
+    } else {
+      // 非管理员用户重定向到首页
+      next('/')
+    }
+  } 
+  // 登录页面重定向逻辑 - 已登录用户访问登录页
+  else if (to.path === '/login' && isLoggedIn) {
+    if (isAdmin) {
+      // 管理员重定向到管理页面
+      next('/admin/users')
+    } else {
+      // 普通用户重定向到首页
+      next('/')
+    }
+  } 
+  else {
     next()
   }
 })

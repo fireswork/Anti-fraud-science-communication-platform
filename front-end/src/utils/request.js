@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 
 // 创建axios实例
 const service = axios.create({
@@ -14,11 +14,7 @@ service.interceptors.response.use(
     
     // 检查返回状态码
     if (res.code !== 200) {
-      ElMessage({
-        message: res.message || '请求失败',
-        type: 'error',
-        duration: 5 * 1000
-      })
+      message.error(res.message || '请求失败');
       
       return Promise.reject(new Error(res.message || '请求失败'))
     } else {
@@ -27,11 +23,7 @@ service.interceptors.response.use(
   },
   error => {
     console.log('请求错误: ' + error)
-    ElMessage({
-      message: error.message || '请求失败',
-      type: 'error',
-      duration: 5 * 1000
-    })
+    message.error(error.message || '请求失败');
     return Promise.reject(error)
   }
 )

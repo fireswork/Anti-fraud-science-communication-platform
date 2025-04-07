@@ -27,6 +27,12 @@ public class User {
     private String email;
 
     @Column
+    private String address;
+
+    @Column
+    private Date birthday;
+
+    @Column
     private String role;
 
     @Column
@@ -81,6 +87,22 @@ public class User {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public void setAddress(String address) {
+        this.address = address;
+    }
+
+    public Date getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(Date birthday) {
+        this.birthday = birthday;
     }
 
     public String getRole() {

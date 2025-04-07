@@ -61,7 +61,7 @@ const loading = ref(false)
 const formState = reactive({
   username: '',
   password: '',
-  remember: false,
+  remember: false
 })
 
 const onFinish = async (values) => {
@@ -69,18 +69,22 @@ const onFinish = async (values) => {
     loading.value = true
     // 调用登录API
     const res = await login(values)
-    if (res.code === 200) {
+    console.log('登录响应:', res)
+    
+    if (res && res.code === 200) {
       message.success(res.message || '登录成功')
       // 将用户信息保存到localStorage
-      setUserInfo(res.data)
-      // 跳转到首页
-      router.push('/')
-    } else {
-      message.error(res.message || '登录失败')
+      setUserInfo(res.data) // 保存data字段，而不是整个res
+      
+      // 根据用户角色决定跳转到哪个页面
+      if (res.data && res.data.role === 'ADMIN') {
+        // 管理员跳转到管理页面
+        router.push('/admin/users')
+      } else {
+        // 普通用户跳转到首页
+        router.push('/')
+      }
     }
-  } catch (error) {
-    console.error('登录请求出错:', error)
-    message.error('登录失败，请稍后再试')
   } finally {
     loading.value = false
   }

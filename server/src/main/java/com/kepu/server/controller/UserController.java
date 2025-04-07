@@ -10,7 +10,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/user")
+@RequestMapping("/user")
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class UserController {
 
     @Autowired
@@ -34,6 +35,8 @@ public class UserController {
             String username = credentials.get("username");
             String password = credentials.get("password");
             
+            System.out.println("尝试登录: username=" + username);
+            
             User user = userService.login(username, password);
             // 返回结果不包含密码
             user.setPassword(null);
@@ -44,8 +47,14 @@ public class UserController {
             data.put("name", user.getName());
             data.put("role", user.getRole());
             
-            return ResponseResult.success("登录成功", data);
+            System.out.println("登录成功，返回数据: " + data);
+            
+            ResponseResult result = ResponseResult.success("登录成功", data);
+            System.out.println("完整响应对象: " + result);
+            
+            return result;
         } catch (Exception e) {
+            System.out.println("登录失败: " + e.getMessage());
             return ResponseResult.fail(400, e.getMessage());
         }
     }

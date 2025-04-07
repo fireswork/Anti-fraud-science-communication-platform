@@ -136,6 +136,7 @@ import {
   HomeOutlined,
   CalendarOutlined,
 } from '@ant-design/icons-vue'
+import { getUserInfo, removeUserInfo } from '@/utils/auth'
 
 const router = useRouter()
 const profileFormRef = ref()
@@ -253,10 +254,7 @@ const handlePasswordCancel = () => {
 
 // 处理退出登录
 const handleLogout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('username')
-  localStorage.removeItem('avatar')
-  localStorage.removeItem('isAdmin')
+  removeUserInfo()
   message.success('退出登录成功')
   router.push('/login')
 }

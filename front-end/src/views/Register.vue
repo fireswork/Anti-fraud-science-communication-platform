@@ -183,12 +183,7 @@ const onFinish = async (values) => {
     if (res.code === 200) {
       message.success(res.message || '注册成功')
       router.push('/login')
-    } else {
-      message.error(res.message || '注册失败')
     }
-  } catch (error) {
-    console.error('注册请求出错:', error)
-    message.error('注册失败，请稍后再试')
   } finally {
     loading.value = false
   }
