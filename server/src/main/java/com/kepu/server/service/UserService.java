@@ -125,8 +125,8 @@ public class UserService {
     public String resetPassword(Long userId) {
         User user = getUserById(userId);
         
-        // 生成6位随机密码
-        String newPassword = generateRandomPassword(6);
+        // 使用固定密码123456
+        String newPassword = "123456";
         user.setPassword(passwordEncoder.encode(newPassword));
         
         userRepository.save(user);

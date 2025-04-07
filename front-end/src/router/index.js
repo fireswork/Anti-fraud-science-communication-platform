@@ -7,6 +7,7 @@ import Read from '@/views/Read.vue'
 import Map from '@/views/MapView.vue'
 import About from '@/views/About.vue'
 import Report from '@/views/Report.vue'
+import Center from '@/views/Center.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import Users from '@/views/Users.vue'
 import Videos from '@/views/Videos.vue'
@@ -53,6 +54,11 @@ const router = createRouter({
       path: '/report',
       name: 'report',
       component: Report,
+    },
+    {
+      path: '/center',
+      name: 'center',
+      component: Center,
     },
     {
       path: '/admin',
