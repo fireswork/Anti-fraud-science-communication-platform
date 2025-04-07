@@ -1,10 +1,18 @@
 <template>
   <div class="map-view-container">
+    <AppHeader />
     <div class="map-content">
       <div class="map-wrapper" id="container"></div>
       <div class="article-list">
-        <h3>附近的文章</h3>
-        <a-list :data-source="nearbyArticles" size="small">
+        <h3>文章位置标记</h3>
+        <a-list 
+          :data-source="nearbyArticles" 
+          size="small"
+          :loading="loading"
+        >
+          <template #empty>
+            <div class="empty-list">暂无文章数据</div>
+          </template>
           <template #renderItem="{ item }">
             <a-list-item>
               <a-list-item-meta>
@@ -14,8 +22,8 @@
                 <template #description>
                   <div>{{ item.location }}</div>
                   <div class="article-meta">
-                    <span>{{ item.author }}</span>
-                    <span>{{ item.date }}</span>
+                    <span>{{ item.author ? item.author.name : '未知' }}</span>
+                    <span>{{ formatDate(item.createTime) }}</span>
                   </div>
                 </template>
               </a-list-item-meta>
@@ -36,8 +44,8 @@
           <a-avatar>
             <template #icon><UserOutlined /></template>
           </a-avatar>
-          <span class="author">{{ currentArticle.author }}</span>
-          <span class="date">{{ currentArticle.date }}</span>
+          <span class="author">{{ currentArticle.author ? currentArticle.author.name : '未知' }}</span>
+          <span class="date">{{ formatDate(currentArticle.createTime) }}</span>
           <span class="location">{{ currentArticle.location }}</span>
         </div>
 
@@ -49,19 +57,31 @@
 
         <div class="comments-section">
           <h3>评论</h3>
+          <div v-if="commentsLoading" class="comments-loading">
+            <a-spin />
+          </div>
           <a-list
-            :data-source="currentArticle.commentList"
+            v-else
+            :data-source="comments"
             item-layout="horizontal"
             :pagination="false"
           >
+            <template #empty>
+              <div class="no-comments">暂无评论</div>
+            </template>
             <template #renderItem="{ item }">
               <a-list-item>
                 <a-comment
-                  :author="item.author"
-                  :avatar="item.avatar"
+                  :author="item.author ? item.author.name : '未知用户'"
                   :content="item.content"
-                  :datetime="item.datetime"
-                />
+                  :datetime="formatDate(item.createTime)"
+                >
+                  <template #avatar>
+                    <a-avatar>
+                      <template #icon><UserOutlined /></template>
+                    </a-avatar>
+                  </template>
+                </a-comment>
               </a-list-item>
             </template>
           </a-list>
@@ -74,6 +94,11 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { UserOutlined } from '@ant-design/icons-vue'
+import AppHeader from '@/components/AppHeader.vue'
+import { getPostList, getPostDetail } from '@/api/post'
+import { getCommentList } from '@/api/comment'
+import { message } from 'ant-design-vue'
+import dayjs from 'dayjs'
 
 const AMAP_KEY = 'b6d79262c73c4413d9e82736c346f2a2'
 const AMAP_API_URL =
@@ -87,54 +112,60 @@ const AMAP_SECURITY_CONFIG = {
 // 配置安全密钥
 window._AMapSecurityConfig = AMAP_SECURITY_CONFIG
 
-// 模拟文章数据
-const mockArticles = [
-  {
-    id: 1,
-    title: '成都某小区电信诈骗案例分析',
-    author: '张三',
-    content: '最近在成都市武侯区某小区发生了一起电信诈骗案件...',
-    location: '成都市武侯区天府三街',
-    longitude: 104.06476,
-    latitude: 30.54876,
-    date: '2024-03-08',
-    commentList: [
-      {
-        author: '李四',
-        avatar: null,
-        content: '这个案例很有警示意义',
-        datetime: '2024-03-08 14:30',
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: '防范校园诈骗指南',
-    author: '王五',
-    content: '针对在四川大学周边发生的几起诈骗案件，整理了以下防范建议...',
-    location: '成都市望江路',
-    longitude: 104.08476,
-    latitude: 30.63876,
-    date: '2024-03-07',
-    commentList: [],
-  },
-  {
-    id: 3,
-    title: '春熙路商圈诈骗手段分析',
-    author: '赵六',
-    content: '春熙路商圈人流量大，容易发生以下几种诈骗情况...',
-    location: '成都市春熙路',
-    longitude: 104.06976,
-    latitude: 30.65876,
-    date: '2024-03-06',
-    commentList: [],
-  },
-]
-
 let map = null
 const modalVisible = ref(false)
 const nearbyArticles = ref([])
-const currentArticle = ref(mockArticles[0])
+const comments = ref([])
+const loading = ref(false)
+const commentsLoading = ref(false)
+
+// 当前选中的文章
+const currentArticle = ref({
+  id: null,
+  title: '',
+  content: '',
+  location: '',
+  author: null,
+  createTime: null,
+  longitude: null,
+  latitude: null
+})
+
+// 格式化日期
+const formatDate = (date) => {
+  if (!date) return ''
+  return dayjs(date).format('YYYY-MM-DD HH:mm')
+}
+
+// 获取文章列表
+const fetchArticles = async () => {
+  loading.value = true
+  try {
+    const res = await getPostList({ pageSize: 100 }) // 获取较多文章以在地图上显示
+    if (res.code === 200) {
+      const articles = res.data.records
+      
+      // 过滤出有经纬度的文章
+      const validArticles = articles.filter(
+        article => article.longitude && article.latitude
+      )
+      
+      nearbyArticles.value = validArticles
+      
+      // 如果地图已初始化，添加标记
+      if (map) {
+        addArticleMarkers(validArticles)
+      }
+    } else {
+      message.error(res.message || '获取文章列表失败')
+    }
+  } catch (error) {
+    console.error('获取文章列表失败:', error)
+    message.error('获取文章列表失败')
+  } finally {
+    loading.value = false
+  }
+}
 
 // 加载高德地图脚本
 const loadAMapScript = () => {
@@ -161,7 +192,7 @@ const initMap = async () => {
     await loadAMapScript()
     map = new AMap.Map('container', {
       zoom: 12,
-      center: [104.06476, 30.54876], // 成都市中心
+      center: [104.06476, 30.54876], // 默认中心点，可以调整
     })
 
     // 添加地图控件
@@ -170,26 +201,32 @@ const initMap = async () => {
       map.addControl(new AMap.ToolBar())
     })
 
-    // 添加文章标记
-    addArticleMarkers()
+    // 获取文章数据并添加标记
+    await fetchArticles()
   } catch (error) {
     console.error('地图加载失败:', error)
+    message.error('地图加载失败')
   }
 }
 
 // 添加文章标记
-const addArticleMarkers = () => {
-  const markers = mockArticles.map((article) => {
+const addArticleMarkers = (articles) => {
+  if (!map || !articles.length) return
+  
+  // 清除现有标记
+  map.clearMap()
+  
+  const markers = articles.map((article) => {
     const marker = new AMap.Marker({
       position: [article.longitude, article.latitude],
       title: article.title,
-      map: map, // 直接将标记添加到地图上
+      map: map
     })
 
     // 添加点击事件
     marker.on('click', () => {
       viewArticle(article)
-      // 更新附近文章列表
+      // 根据当前文章更新列表排序
       updateNearbyArticles(article)
     })
 
@@ -197,35 +234,71 @@ const addArticleMarkers = () => {
   })
 
   // 添加标记聚合
-  map.plugin(['AMap.MarkerCluster'], () => {
-    const cluster = new AMap.MarkerCluster(map, markers, {
-      gridSize: 80,
-      minClusterSize: 2,
+  if (markers.length > 1) {
+    map.plugin(['AMap.MarkerCluster'], () => {
+      const cluster = new AMap.MarkerCluster(map, markers, {
+        gridSize: 80,
+        minClusterSize: 2
+      })
+      cluster.setMap(map)
     })
-    cluster.setMap(map) // 将聚合添加到地图上
-  })
+  }
 
   // 调整地图视野以包含所有标记
-  map.setFitView()
-
-  // 初始化显示所有文章
-  nearbyArticles.value = mockArticles
+  if (markers.length > 0) {
+    map.setFitView()
+  }
 }
 
-// 更新附近文章列表
+// 更新附近文章列表，根据与当前选中文章的距离排序
 const updateNearbyArticles = (centerArticle) => {
-  // 这里可以根据距离进行排序，这里简单处理，显示所有文章
-  nearbyArticles.value = mockArticles.sort((a, b) => {
+  if (!centerArticle || !centerArticle.id) return
+  
+  // 将选中的文章置顶，其他保持原顺序
+  nearbyArticles.value = [...nearbyArticles.value].sort((a, b) => {
     if (a.id === centerArticle.id) return -1
     if (b.id === centerArticle.id) return 1
     return 0
   })
 }
 
+// 获取文章评论
+const fetchComments = async (postId) => {
+  if (!postId) return
+  
+  commentsLoading.value = true
+  try {
+    const res = await getCommentList(postId)
+    if (res.code === 200) {
+      comments.value = res.data
+    } else {
+      message.error(res.message || '获取评论失败')
+    }
+  } catch (error) {
+    console.error('获取评论失败:', error)
+    message.error('获取评论失败')
+  } finally {
+    commentsLoading.value = false
+  }
+}
+
 // 查看文章详情
-const viewArticle = (article) => {
-  currentArticle.value = article
-  modalVisible.value = true
+const viewArticle = async (article) => {
+  try {
+    const res = await getPostDetail(article.id)
+    if (res.code === 200) {
+      currentArticle.value = res.data
+      modalVisible.value = true
+      
+      // 获取文章评论
+      fetchComments(article.id)
+    } else {
+      message.error(res.message || '获取文章详情失败')
+    }
+  } catch (error) {
+    console.error('获取文章详情失败:', error)
+    message.error('获取文章详情失败')
+  }
 }
 
 const handleModalOk = () => {
@@ -259,6 +332,7 @@ onBeforeUnmount(() => {
   display: flex;
   position: relative;
   overflow: hidden;
+  margin-top: 64px; // 为顶部导航栏预留空间
 
   .map-wrapper {
     flex: 1;
@@ -298,6 +372,12 @@ onBeforeUnmount(() => {
       font-size: 12px;
       margin-top: 4px;
     }
+    
+    .empty-list {
+      text-align: center;
+      color: #999;
+      padding: 20px 0;
+    }
   }
 }
 
@@ -329,6 +409,17 @@ onBeforeUnmount(() => {
 .comments-section {
   h3 {
     margin-bottom: 16px;
+  }
+  
+  .comments-loading {
+    text-align: center;
+    padding: 20px 0;
+  }
+  
+  .no-comments {
+    text-align: center;
+    color: #999;
+    padding: 20px 0;
   }
 }
 </style>
