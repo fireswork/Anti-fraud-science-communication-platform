@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -62,8 +63,6 @@ public class UserController {
     @GetMapping("/info")
     public ResponseResult getUserInfo(@RequestParam String userId) {
         try {
-            // TODO: 根据用户ID获取用户信息，这里需要实现
-            // 简单示例，实际中应该从数据库获取
             User user = userService.getUserById(Long.parseLong(userId));
             if (user != null) {
                 user.setPassword(null);
@@ -79,5 +78,94 @@ public class UserController {
     public ResponseResult logout() {
         // 前端清除localStorage中的用户信息即可
         return ResponseResult.success("已退出登录", null);
+    }
+    
+    /**
+     * 获取用户列表
+     */
+    @GetMapping("/list")
+    public ResponseResult getUserList(
+            @RequestParam(value = "page", defaultValue = "1") Integer page,
+            @RequestParam(value = "pageSize", defaultValue = "10") Integer pageSize,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        try {
+            Map<String, Object> result = userService.getUserList(page, pageSize, keyword);
+            return ResponseResult.success(result);
+        } catch (Exception e) {
+            return ResponseResult.fail(400, e.getMessage());
+        }
+    }
+    
+    /**
+     * 添加用户
+     */
+    @PostMapping("/add")
+    public ResponseResult addUser(@RequestBody User user) {
+        try {
+            User newUser = userService.register(user);
+            newUser.setPassword(null);
+            return ResponseResult.success("用户添加成功", newUser);
+        } catch (Exception e) {
+            return ResponseResult.fail(400, e.getMessage());
+        }
+    }
+    
+    /**
+     * 更新用户
+     */
+    @PutMapping("/update")
+    public ResponseResult updateUser(@RequestBody User user) {
+        try {
+            User updatedUser = userService.updateUser(user);
+            updatedUser.setPassword(null);
+            return ResponseResult.success("用户更新成功", updatedUser);
+        } catch (Exception e) {
+            return ResponseResult.fail(400, e.getMessage());
+        }
+    }
+    
+    /**
+     * 删除用户
+     */
+    @DeleteMapping("/delete")
+    public ResponseResult deleteUser(@RequestParam Long userId) {
+        try {
+            userService.deleteUser(userId);
+            return ResponseResult.success("用户删除成功", null);
+        } catch (Exception e) {
+            return ResponseResult.fail(400, e.getMessage());
+        }
+    }
+    
+    /**
+     * 重置密码
+     */
+    @PostMapping("/reset-password")
+    public ResponseResult resetPassword(@RequestParam Long userId) {
+        try {
+            String newPassword = userService.resetPassword(userId);
+            Map<String, String> data = new HashMap<>();
+            data.put("newPassword", newPassword);
+            return ResponseResult.success("密码重置成功", data);
+        } catch (Exception e) {
+            return ResponseResult.fail(400, e.getMessage());
+        }
+    }
+    
+    /**
+     * 修改密码
+     */
+    @PostMapping("/change-password")
+    public ResponseResult changePassword(@RequestBody Map<String, Object> params) {
+        try {
+            Long userId = Long.parseLong(params.get("userId").toString());
+            String oldPassword = params.get("oldPassword").toString();
+            String newPassword = params.get("newPassword").toString();
+            
+            userService.changePassword(userId, oldPassword, newPassword);
+            return ResponseResult.success("密码修改成功", null);
+        } catch (Exception e) {
+            return ResponseResult.fail(400, e.getMessage());
+        }
     }
 }

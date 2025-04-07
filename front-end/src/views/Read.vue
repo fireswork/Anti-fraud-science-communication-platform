@@ -50,7 +50,7 @@
     </div>
 
     <a-modal
-      v-model:visible="modalVisible"
+      v-model:open="modalVisible"
       :title="currentArticle.title"
       width="800px"
       @ok="handleModalOk"

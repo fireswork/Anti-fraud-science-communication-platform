@@ -78,4 +78,19 @@ export function resetPassword(userId) {
     method: 'post',
     params: { userId }
   })
+}
+
+// 修改密码
+export function changePassword(data) {
+  return request({
+    url: '/user/change-password',
+    method: 'post',
+    data
+  })
+}
+
+// 获取当前用户信息
+export function getCurrentUserInfo() {
+  const userId = JSON.parse(localStorage.getItem('userInfo')).userId;
+  return getUserInfo(userId);
 } 

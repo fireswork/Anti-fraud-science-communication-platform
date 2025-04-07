@@ -39,7 +39,7 @@
 
     <!-- 添加/编辑用户弹窗 -->
     <a-modal
-      v-model:visible="userModalVisible"
+      v-model:open="userModalVisible"
       :title="isEdit ? '编辑用户' : '添加用户'"
       @ok="handleUserSubmit"
       :confirmLoading="submitting"
@@ -89,6 +89,19 @@
         </a-form-item>
 
         <a-form-item
+          label="生日"
+          name="birthday"
+        >
+          <a-date-picker
+            v-model:value="userForm.birthday"
+            placeholder="请选择生日"
+            format="YYYY-MM-DD"
+            :disabledDate="disabledDate"
+            style="width: 100%"
+          />
+        </a-form-item>
+
+        <a-form-item
           label="地址"
           name="address"
         >
@@ -125,6 +138,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { UserAddOutlined } from '@ant-design/icons-vue'
 import { getUserList, addUser, updateUser, deleteUser, resetPassword } from '@/api/user'
+import dayjs from 'dayjs'
 
 const userFormRef = ref(null)
 
@@ -149,6 +163,14 @@ const columns = [
     title: '手机号',
     dataIndex: 'phone',
     key: 'phone',
+  },
+  {
+    title: '生日',
+    dataIndex: 'birthday',
+    key: 'birthday',
+    customRender: ({ text }) => {
+      return text ? dayjs(text).format('YYYY-MM-DD') : '-';
+    }
   },
   {
     title: '地址',
@@ -195,6 +217,7 @@ const userForm = reactive({
   email: '',
   phone: '',
   address: '',
+  birthday: null,
   password: '',
   confirmPassword: '',
 })
@@ -228,6 +251,11 @@ const validateConfirmPassword = async (rule, value) => {
   if (value !== userForm.password) {
     throw new Error('两次输入的密码不一致')
   }
+}
+
+// 禁用未来日期
+const disabledDate = (current) => {
+  return current && current > dayjs().endOf('day');
 }
 
 // 初始化
@@ -286,25 +314,32 @@ const handleUserSubmit = async () => {
     await userFormRef.value.validate()
     submitting.value = true
     
+    const formData = {
+      ...userForm,
+      birthday: userForm.birthday ? dayjs(userForm.birthday).format('YYYY-MM-DD') : null
+    }
+    
     let res
     if (isEdit.value) {
       // 编辑用户
       res = await updateUser({
-        id: userForm.id,
-        name: userForm.name,
-        email: userForm.email,
-        phone: userForm.phone,
-        address: userForm.address
+        id: formData.id,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        birthday: formData.birthday
       })
     } else {
       // 添加用户
       res = await addUser({
-        username: userForm.username,
-        name: userForm.name,
-        email: userForm.email,
-        phone: userForm.phone,
-        address: userForm.address,
-        password: userForm.password
+        username: formData.username,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+        birthday: formData.birthday,
+        password: formData.password
       })
     }
     
@@ -330,6 +365,7 @@ const handleEdit = (record) => {
   userForm.email = record.email
   userForm.phone = record.phone
   userForm.address = record.address || ''
+  userForm.birthday = record.birthday ? dayjs(record.birthday) : null
   userModalVisible.value = true
 }
 

@@ -33,7 +33,7 @@
 
     <!-- 修改个人信息 Modal -->
     <a-modal
-      v-model:visible="profileModalVisible"
+      v-model:open="profileModalVisible"
       title="修改个人信息"
       @ok="handleProfileSubmit"
       @cancel="handleProfileCancel"
@@ -89,7 +89,7 @@
 
     <!-- 修改密码 Modal -->
     <a-modal
-      v-model:visible="passwordModalVisible"
+      v-model:open="passwordModalVisible"
       title="修改密码"
       @ok="handlePasswordSubmit"
       @cancel="handlePasswordCancel"
@@ -122,7 +122,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -137,6 +137,8 @@ import {
   CalendarOutlined,
 } from '@ant-design/icons-vue'
 import { getUserInfo, removeUserInfo } from '@/utils/auth'
+import { updateUser, changePassword, getCurrentUserInfo } from '@/api/user'
+import dayjs from 'dayjs'
 
 const router = useRouter()
 const profileFormRef = ref()
@@ -148,6 +150,7 @@ const passwordModalVisible = ref(false)
 
 // 个人信息表单
 const profileForm = reactive({
+  id: '',
   username: '',
   name: '',
   phone: '',
@@ -179,7 +182,6 @@ const profileRules = {
     { type: 'email', message: '请输入正确的邮箱格式' },
   ],
   address: [{ required: true, message: '请输入详细地址' }],
-  birthday: [{ required: true, message: '请选择出生日期' }],
 }
 
 const passwordRules = {
@@ -201,8 +203,31 @@ const passwordRules = {
   ],
 }
 
+// 加载用户信息
+const loadUserInfo = async () => {
+  try {
+    const res = await getCurrentUserInfo()
+    if (res.code === 200) {
+      const userData = res.data
+      profileForm.id = userData.id
+      profileForm.username = userData.username
+      profileForm.name = userData.name
+      profileForm.phone = userData.phone
+      profileForm.email = userData.email
+      profileForm.address = userData.address || ''
+      profileForm.birthday = userData.birthday ? dayjs(userData.birthday) : null
+    } else {
+      message.error('获取用户信息失败')
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+    message.error('获取用户信息失败')
+  }
+}
+
 // 显示修改个人信息 Modal
-const showProfileModal = () => {
+const showProfileModal = async () => {
+  await loadUserInfo()
   profileModalVisible.value = true
 }
 
@@ -215,9 +240,24 @@ const showPasswordModal = () => {
 const handleProfileSubmit = async () => {
   try {
     await profileFormRef.value.validate()
-    // TODO: 调用API更新用户信息
-    message.success('个人信息更新成功')
-    profileModalVisible.value = false
+    
+    const formData = {
+      id: profileForm.id,
+      name: profileForm.name,
+      email: profileForm.email,
+      phone: profileForm.phone,
+      address: profileForm.address,
+      birthday: profileForm.birthday ? profileForm.birthday.format('YYYY-MM-DD') : null
+    }
+    
+    const res = await updateUser(formData)
+    
+    if (res.code === 200) {
+      message.success('个人信息更新成功')
+      profileModalVisible.value = false
+    } else {
+      message.error(res.message || '更新失败')
+    }
   } catch (error) {
     console.error('表单验证失败:', error)
   }
@@ -227,13 +267,25 @@ const handleProfileSubmit = async () => {
 const handlePasswordSubmit = async () => {
   try {
     await passwordFormRef.value.validate()
-    // TODO: 调用API更新密码
-    message.success('密码修改成功')
-    passwordModalVisible.value = false
-    // 清空表单
-    passwordForm.currentPassword = ''
-    passwordForm.newPassword = ''
-    passwordForm.confirmPassword = ''
+    
+    const userId = JSON.parse(localStorage.getItem('userInfo')).userId
+    
+    const res = await changePassword({
+      userId: userId,
+      oldPassword: passwordForm.currentPassword,
+      newPassword: passwordForm.newPassword
+    })
+    
+    if (res.code === 200) {
+      message.success('密码修改成功')
+      passwordModalVisible.value = false
+      // 清空表单
+      passwordForm.currentPassword = ''
+      passwordForm.newPassword = ''
+      passwordForm.confirmPassword = ''
+    } else {
+      message.error(res.message || '密码修改失败')
+    }
   } catch (error) {
     console.error('表单验证失败:', error)
   }
@@ -258,6 +310,12 @@ const handleLogout = () => {
   message.success('退出登录成功')
   router.push('/login')
 }
+
+// 页面加载时
+onMounted(() => {
+  // 可以选择在这里预加载用户信息
+  // loadUserInfo()
+})
 </script>
 
 <style lang="less" scoped>

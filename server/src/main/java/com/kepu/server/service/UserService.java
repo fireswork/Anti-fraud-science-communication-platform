@@ -5,10 +5,19 @@ import com.kepu.server.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 
 @Service
 public class UserService {
@@ -53,6 +62,104 @@ public class UserService {
     public User getUserById(Long id) {
         return userRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("用户不存在"));
+    }
+    
+    // 获取用户列表（分页）
+    public Map<String, Object> getUserList(Integer page, Integer pageSize, String keyword) {
+        Pageable pageable = PageRequest.of(page - 1, pageSize, Sort.by("id").descending());
+        Page<User> userPage;
+        
+        if (StringUtils.hasText(keyword)) {
+            userPage = userRepository.findByUsernameContainingOrNameContainingOrEmailContaining(
+                keyword, keyword, keyword, pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+        
+        List<User> users = userPage.getContent();
+        // 不返回密码
+        users.forEach(user -> user.setPassword(null));
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("records", users);
+        result.put("total", userPage.getTotalElements());
+        result.put("pages", userPage.getTotalPages());
+        result.put("current", page);
+        
+        return result;
+    }
+    
+    // 更新用户
+    public User updateUser(User user) {
+        User existingUser = getUserById(user.getId());
+        
+        // 更新基本信息
+        if (StringUtils.hasText(user.getName())) {
+            existingUser.setName(user.getName());
+        }
+        if (StringUtils.hasText(user.getEmail())) {
+            existingUser.setEmail(user.getEmail());
+        }
+        if (StringUtils.hasText(user.getPhone())) {
+            existingUser.setPhone(user.getPhone());
+        }
+        if (StringUtils.hasText(user.getAddress())) {
+            existingUser.setAddress(user.getAddress());
+        }
+        if (user.getBirthday() != null) {
+            existingUser.setBirthday(user.getBirthday());
+        }
+        
+        return userRepository.save(existingUser);
+    }
+    
+    // 删除用户
+    public void deleteUser(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw new RuntimeException("用户不存在");
+        }
+        userRepository.deleteById(userId);
+    }
+    
+    // 重置密码
+    public String resetPassword(Long userId) {
+        User user = getUserById(userId);
+        
+        // 生成6位随机密码
+        String newPassword = generateRandomPassword(6);
+        user.setPassword(passwordEncoder.encode(newPassword));
+        
+        userRepository.save(user);
+        
+        return newPassword;
+    }
+    
+    // 修改密码
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = getUserById(userId);
+        
+        // 验证旧密码
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new RuntimeException("当前密码不正确");
+        }
+        
+        // 设置新密码
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+    
+    // 生成随机密码
+    private String generateRandomPassword(int length) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        StringBuilder sb = new StringBuilder();
+        Random random = new Random();
+        
+        for (int i = 0; i < length; i++) {
+            int index = random.nextInt(chars.length());
+            sb.append(chars.charAt(index));
+        }
+        
+        return sb.toString();
     }
 
     // 初始化管理员账号

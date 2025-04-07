@@ -84,6 +84,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { FileTextOutlined, EnvironmentOutlined, AimOutlined } from '@ant-design/icons-vue'
 import AppHeader from '@/components/AppHeader.vue'
+import { createPost } from '@/api/post'
 
 const AMAP_KEY = 'b6d79262c73c4413d9e82736c346f2a2'
 const AMAP_API_URL =
@@ -187,9 +188,7 @@ const showMapModal = () => {
   mapVisible.value = true
   // 等待 DOM 更新后初始化地图
   setTimeout(async () => {
-    if (!map) {
-      await initMap()
-    }
+    await initMap()
     // 如果没有选择过位置，自动定位到当前城市
     if (!marker.value) {
       getCurrentLocation()
@@ -313,19 +312,46 @@ const confirmLocation = () => {
   mapVisible.value = false
 }
 
+// 监听弹窗关闭事件，销毁地图实例
+const handleMapModalClose = () => {
+  if (map) {
+    map.destroy()
+    map = null
+  }
+}
+
 const onFinish = async (values) => {
   try {
     loading.value = true
-    // TODO: 实现发布逻辑
-    console.log('文章信息:', {
-      ...values,
+    
+    // 获取当前登录用户ID
+    const userInfo = JSON.parse(localStorage.getItem('userInfo'))
+    if (!userInfo || !userInfo.userId) {
+      message.error('请先登录')
+      router.push('/login')
+      return
+    }
+    
+    const postData = {
+      userId: userInfo.userId,
+      title: formState.title,
+      content: formState.content,
+      location: formState.location,
       longitude: formState.longitude,
-      latitude: formState.latitude,
-    })
-    message.success('发布成功')
-    router.push('/read')
+      latitude: formState.latitude
+    }
+    
+    const res = await createPost(postData)
+    
+    if (res.code === 200) {
+      message.success('文章发布成功')
+      router.push('/read')
+    } else {
+      message.error(res.message || '发布失败')
+    }
   } catch (error) {
-    message.error('发布失败')
+    console.error('发布失败:', error)
+    message.error('发布失败，请稍后再试')
   } finally {
     loading.value = false
   }

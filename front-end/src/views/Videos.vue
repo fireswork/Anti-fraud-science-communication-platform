@@ -89,7 +89,7 @@
     </a-modal>
 
     <!-- 预览视频弹窗 -->
-    <a-modal v-model:visible="previewModalVisible" title="视频预览" width="800px" :footer="null">
+    <a-modal v-model:open="previewModalVisible" title="视频预览" width="800px" :footer="null">
       <video v-if="previewVideo" :src="previewVideo.url" controls style="width: 100%"></video>
     </a-modal>
   </div>
