@@ -52,6 +52,8 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { UserOutlined, LockOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
+import { login } from '@/api/user'
+import { setUserInfo } from '@/utils/auth'
 
 const router = useRouter()
 const loading = ref(false)
@@ -65,12 +67,20 @@ const formState = reactive({
 const onFinish = async (values) => {
   try {
     loading.value = true
-    // TODO: 实现登录逻辑
-    console.log('登录信息:', values)
-    message.success('登录成功')
-    router.push('/')
+    // 调用登录API
+    const res = await login(values)
+    if (res.code === 200) {
+      message.success(res.message || '登录成功')
+      // 将用户信息保存到localStorage
+      setUserInfo(res.data)
+      // 跳转到首页
+      router.push('/')
+    } else {
+      message.error(res.message || '登录失败')
+    }
   } catch (error) {
-    message.error('登录失败')
+    console.error('登录请求出错:', error)
+    message.error('登录失败，请稍后再试')
   } finally {
     loading.value = false
   }

@@ -114,6 +114,8 @@ import {
   HomeOutlined,
   CalendarOutlined,
 } from '@ant-design/icons-vue'
+import { register } from '@/api/user' 
+import dayjs from 'dayjs'
 
 const router = useRouter()
 const loading = ref(false)
@@ -165,12 +167,28 @@ const rules = {
 const onFinish = async (values) => {
   try {
     loading.value = true
-    // TODO: 实现注册逻辑
-    console.log('注册信息:', values)
-    message.success('注册成功')
-    router.push('/login')
+    
+    // 处理生日格式 
+    const userData = { ...values }
+    if (userData.birthday) {
+      userData.birthday = dayjs(userData.birthday).format('YYYY-MM-DD')
+    }
+    
+    // 删除确认密码字段，后端不需要
+    delete userData.confirmPassword
+    
+    // 调用注册API
+    const res = await register(userData)
+    
+    if (res.code === 200) {
+      message.success(res.message || '注册成功')
+      router.push('/login')
+    } else {
+      message.error(res.message || '注册失败')
+    }
   } catch (error) {
-    message.error('注册失败')
+    console.error('注册请求出错:', error)
+    message.error('注册失败，请稍后再试')
   } finally {
     loading.value = false
   }
