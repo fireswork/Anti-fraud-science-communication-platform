@@ -23,16 +23,9 @@
           </div>
         </template>
 
-        <template v-if="column.key === 'status'">
-          <a-tag :color="getStatusColor(record.status)">
-            {{ getStatusText(record.status) }}
-          </a-tag>
-        </template>
-
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button type="link" @click="handlePreview(record)">预览</a-button>
-            <a-button type="link" @click="handleEdit(record)">编辑</a-button>
             <a-popconfirm title="确定要删除这个视频吗？" @confirm="handleDelete(record)">
               <a-button type="link" danger>删除</a-button>
             </a-popconfirm>
@@ -90,15 +83,58 @@
 
     <!-- 预览视频弹窗 -->
     <a-modal v-model:open="previewModalVisible" title="视频预览" width="800px" :footer="null">
-      <video v-if="previewVideo" :src="previewVideo.url" controls style="width: 100%"></video>
+      <template v-if="previewVideo">
+        <div class="video-details">
+          <h3>{{ previewVideo.title }}</h3>
+          <p class="video-upload-time">上传时间：{{ formatDate(previewVideo.uploadTime) }}</p>
+          <div class="video-description">{{ previewVideo.description }}</div>
+        </div>
+        <div class="video-player">
+          <video 
+            ref="videoPlayer"
+            controls
+            style="width: 100%; max-height: 70vh;"
+            controlsList="nodownload"
+            autoplay
+            :key="currentVideoUrl"
+          >
+            <source :src="currentVideoUrl" type="video/mp4">
+            您的浏览器不支持 HTML5 视频播放
+          </video>
+          
+          <!-- 备用播放方式 -->
+          <div v-if="videoError" class="video-fallback">
+            <iframe 
+              :src="currentVideoUrl" 
+              style="width: 100%; height: 400px; border: none;"
+              allowfullscreen
+            ></iframe>
+          </div>
+          
+          <div v-if="videoError" class="video-error">
+            <p>视频加载失败，请<a href="#" @click.prevent="retryVideo">重新加载</a>或者 
+              <a :href="currentVideoUrl" target="_blank">在新窗口打开</a>
+            </p>
+            <div class="video-actions">
+              <a-button type="primary" @click="downloadVideo">下载视频</a-button>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template v-else>
+        <a-spin tip="加载中..."></a-spin>
+      </template>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { UploadOutlined, VideoCameraOutlined } from '@ant-design/icons-vue'
+import { getVideoList, uploadVideo, deleteVideo, updateVideo, getVideoDetail, checkVideoFile } from '@/api/video'
+import dayjs from 'dayjs'
+import 'video.js/dist/video-js.css'
 
 // 表格列定义
 const columns = [
@@ -108,14 +144,15 @@ const columns = [
     key: 'title',
   },
   {
+    title: '视频描述',
+    dataIndex: "description",
+    key: "description"
+  },
+  {
     title: '上传时间',
     dataIndex: 'uploadTime',
     key: 'uploadTime',
-  },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
+    customRender: ({ text }) => formatDate(text)
   },
   {
     title: '操作',
@@ -123,29 +160,13 @@ const columns = [
   },
 ]
 
-// 模拟视频数据
-const videoList = ref([
-  {
-    id: 1,
-    title: '防范电信诈骗指南',
-    uploadTime: '2024-03-15 14:30',
-    status: 'published',
-    url: 'https://example.com/video1.mp4',
-  },
-  {
-    id: 2,
-    title: '网络购物防骗技巧',
-    uploadTime: '2024-03-14 16:45',
-    status: 'processing',
-    url: 'https://example.com/video2.mp4',
-  },
-])
-
-// 分页配置
+// 视频列表数据
+const videoList = ref([])
 const pagination = reactive({
   current: 1,
   pageSize: 10,
-  total: 100,
+  total: 0,
+  showTotal: (total) => `共 ${total} 条`,
 })
 
 // 加载状态
@@ -163,24 +184,42 @@ const uploadForm = reactive({
 // 预览相关
 const previewModalVisible = ref(false)
 const previewVideo = ref(null)
+const videoError = ref(false)
+const videoPlayer = ref(null)
+const player = ref(null)
+// API基础URL
+const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+// 当前使用的视频URL
+const currentVideoUrl = ref('')
 
-// 状态处理
-const getStatusColor = (status) => {
-  const colors = {
-    published: 'success',
-    processing: 'processing',
-    failed: 'error',
-  }
-  return colors[status] || 'default'
+// 格式化日期
+const formatDate = (date) => {
+  if (!date) return ''
+  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
-const getStatusText = (status) => {
-  const texts = {
-    published: '已发布',
-    processing: '处理中',
-    failed: '上传失败',
+// 获取视频列表
+const fetchVideoList = async () => {
+  loading.value = true
+  try {
+    const params = {
+      page: pagination.current,
+      pageSize: pagination.pageSize
+    }
+    
+    const res = await getVideoList(params)
+    if (res.code === 200) {
+      videoList.value = res.data.records
+      pagination.total = res.data.total
+    } else {
+      message.error(res.message || '获取视频列表失败')
+    }
+  } catch (error) {
+    console.error('获取视频列表失败:', error)
+    message.error('获取视频列表失败')
+  } finally {
+    loading.value = false
   }
-  return texts[status] || '未知状态'
 }
 
 // 事件处理
@@ -202,40 +241,159 @@ const beforeUpload = (file) => {
   return false // 阻止自动上传
 }
 
-const handleUploadSubmit = () => {
+const handleUploadSubmit = async () => {
+  if (!uploadForm.title.trim()) {
+    message.warning('请输入视频标题')
+    return
+  }
+  
+  if (uploadForm.fileList.length === 0) {
+    message.warning('请选择视频文件')
+    return
+  }
+  
   uploading.value = true
-  // 模拟上传过程
-  setTimeout(() => {
+  try {
+    // 获取当前登录用户ID
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    if (!userInfo.userId) {
+      message.error('请先登录')
+      uploading.value = false
+      return
+    }
+    
+    // 创建表单数据
+    const formData = new FormData()
+    formData.append('file', uploadForm.fileList[0].originFileObj)
+    formData.append('title', uploadForm.title)
+    formData.append('description', uploadForm.description || '')
+    formData.append('userId', userInfo.userId)
+    
+    // 调用上传API
+    const res = await uploadVideo(formData)
+    
+    if (res.code === 200) {
+      message.success('视频上传成功')
+      uploadModalVisible.value = false
+      
+      // 重置表单
+      uploadForm.title = ''
+      uploadForm.description = ''
+      uploadForm.fileList = []
+      
+      // 刷新视频列表
+      fetchVideoList()
+    } else {
+      message.error(res.message || '上传失败')
+    }
+  } catch (error) {
+    console.error('上传视频失败:', error)
+    message.error('上传视频失败')
+  } finally {
     uploading.value = false
-    uploadModalVisible.value = false
-    message.success('视频上传成功')
-    // 重置表单
-    uploadForm.title = ''
-    uploadForm.description = ''
-    uploadForm.fileList = []
-  }, 2000)
+  }
 }
 
-const handlePreview = (record) => {
-  previewVideo.value = record
-  previewModalVisible.value = true
+const handlePreview = async (record) => {
+  try {
+    const res = await getVideoDetail(record.id)
+    if (res.code === 200) {
+      previewVideo.value = res.data
+      if (previewVideo.value && previewVideo.value.url) {
+        // 检查URL是否已经包含完整域名
+        if (previewVideo.value.url.startsWith('http')) {
+          currentVideoUrl.value = previewVideo.value.url
+        } else {
+          currentVideoUrl.value = `${baseUrl}${previewVideo.value.url}`
+        }
+        console.log('完整视频URL:', currentVideoUrl.value)
+        previewModalVisible.value = true
+        videoError.value = false
+      } else {
+        message.error('视频URL不存在')
+      }
+    } else {
+      message.error(res.message || '获取视频详情失败')
+    }
+  } catch (error) {
+    console.error('获取视频详情失败:', error)
+    message.error('获取视频详情失败')
+  }
 }
 
-const handleEdit = (record) => {
-  console.log('编辑视频:', record)
-  message.info('编辑功能开发中')
-}
-
-const handleDelete = (record) => {
-  console.log('删除视频:', record)
-  message.success('删除成功')
+const handleDelete = async (record) => {
+  try {
+    // 获取当前登录用户ID
+    const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    if (!userInfo.userId) {
+      message.error('请先登录')
+      return
+    }
+    
+    const res = await deleteVideo(record.id, userInfo.userId)
+    if (res.code === 200) {
+      message.success('删除成功')
+      // 刷新视频列表
+      fetchVideoList()
+    } else {
+      message.error(res.message || '删除失败')
+    }
+  } catch (error) {
+    console.error('删除视频失败:', error)
+    message.error('删除视频失败')
+  }
 }
 
 const handleTableChange = (pag) => {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
-  // 这里可以调用接口重新加载数据
+  fetchVideoList()
 }
+
+const handleVideoError = (e) => {
+  console.error('视频加载错误:', e)
+  const video = e.target
+  console.log('视频元素状态:', {
+    error: video.error ? {
+      code: video.error.code,
+      message: video.error.message
+    } : null,
+    currentSrc: video.currentSrc
+  })
+  videoError.value = true
+  message.error('视频加载失败，请稍后重试')
+}
+
+const retryVideo = () => {
+  if (videoPlayer.value) {
+    videoError.value = false
+    videoPlayer.value.load()
+  }
+}
+
+// 下载视频
+const downloadVideo = () => {
+  if (!previewVideo.value || !previewVideo.value.url) return;
+  
+  const videoUrl = `${baseUrl}${previewVideo.value.url}`;
+  const link = document.createElement('a');
+  link.href = videoUrl;
+  link.download = previewVideo.value.title + videoUrl.substring(videoUrl.lastIndexOf('.'));
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// 页面加载时获取视频列表
+onMounted(() => {
+  fetchVideoList()
+})
+
+onUnmounted(() => {
+  if (player.value) {
+    player.value.dispose()
+  }
+})
 </script>
 
 <style lang="less" scoped>
@@ -253,5 +411,68 @@ const handleTableChange = (pag) => {
       color: #1890ff;
     }
   }
+}
+
+// 视频预览样式
+.video-details {
+  margin-bottom: 16px;
+  
+  h3 {
+    margin-bottom: 8px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  
+  .video-upload-time {
+    margin-bottom: 8px;
+    color: #666;
+    font-size: 14px;
+  }
+  
+  .video-description {
+    margin-bottom: 16px;
+    white-space: pre-line;
+    color: #333;
+  }
+}
+
+.video-player {
+  background-color: #000;
+  border-radius: 4px;
+  overflow: hidden;
+  
+  video {
+    display: block;
+    width: 100%;
+    max-height: 450px;
+    outline: none;
+  }
+}
+
+.video-error {
+  margin-top: 16px;
+  padding: 8px;
+  background-color: #fff;
+  border: 1px solid #ffa39e;
+  border-radius: 4px;
+  color: #ff4d4f;
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    color: #1890ff;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.video-actions {
+  margin-top: 16px;
+  text-align: right;
 }
 </style>
